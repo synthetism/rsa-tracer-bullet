@@ -1,11 +1,15 @@
-# RSA — Stage 1: the loop, by hand
+# The RSA tracer bullet — the loop, by hand
 
-**One service, one agent that has never signed up, and no shared secret anywhere.** This is the
-whole product minus packaging: an agent with no account is admitted, attributed and metered, and
-every refusal is a receipted artifact rather than a log line.
+**One service, one agent that has never signed up, and no shared secret anywhere.** An agent with no
+account is admitted, attributed and metered, and every refusal is a receipted artifact rather than a
+log line.
 
 Not a product. A test harness that happens to speak HTTP — the funnel here is ~300 lines because
 the hard part is already in the packages.
+
+**This repository is frozen.** It is evidence of what was believed in October 2026, not a codebase to
+improve — the loop it proves is the product, and the product is many parts working together. Findings
+do not land here; they go to `rsa/PRODUCT-SPEC.md` in `private-docs`.
 
 ## Run it
 
@@ -27,12 +31,15 @@ alice  did:key:z6MkoHAwme8rqYgVy5txajbKyW1wTGSkvQvt2Pwi3C3qdfAz
   → asking http://127.0.0.1:8099 what it requires
   ✓ market-read v1, signed by the service — did:key:z6MksZJeG2YPq1i5kb5wGUdASSodv53MhiR1neECA1BdVumn
   → presenting the authorization
-  ✓ session           c11d3292-64a5-49d4-8805-f81fbc4496ba
-  ✓ authentication    c11d3292-64a5-49d4-8805-f81fbc4496ba
+  ✓ session           c2bd1cbc-b927-4dfd-b594-2cc114ef0d7e
+  ✓ authentication    c2bd1cbc-b927-4dfd-b594-2cc114ef0d7e
   ✓ its issuer is the service that authorised us — the handshake holds
+  → asking the pool what is left
+  ✓ balance           3 call(s) in https://api.example.com/market
   → calling /work for ACME
-  ✓ data              [{"symbol":"ACME","bid":101.25,"ask":101.4,…}]
-  ✓ receipt           urn:credential:receipt-credential:819b97c895a32b87cf4e09ba
+  ✓ data              [{"symbol":"ACME","bid":101.25,"ask":101.4,"at":"2026-10-16T09:00:00.000Z"},
+                       {"symbol":"ACME","bid":101.1,"ask":101.3,"at":"2026-10-16T09:01:00.000Z"}]
+  ✓ receipt           urn:credential:receipt-credential:6011443f5551f29f625e5cad
                       verdict honoured
   2 call(s) left in the pool
 ```
@@ -71,9 +78,13 @@ agent into over-disclosure. Alice verifies it against the issuer on her own auth
 4  Alice ──► POST /admit { vp }         five checks, cheapest first
 5  Bob   ──► session + Authentication VC + the same id in both
 6  Alice ──► verify(authentication)    ← and compares its issuer to her authorization's
-7  Alice ──► POST /work { session, nonce, request, sig }    no token, ever
-8  Bob   ──► data + receipt
+7  Alice ──► POST /balance             what is left — and it bills nothing
+8  Alice ──► POST /work { session, nonce, request, sig }    no token, ever
+9  Bob   ──► data + receipt
 ```
+
+**Step 5 issues no receipt and moves no counter.** Nothing has been called, so there is nothing to
+receipt, and a receipt for a call that did not happen would be a lie the service signed.
 
 **Step 6 is the half everyone forgets.** Bob proves control of the issuer key; Alice proves control
 of the holder key. A service cannot impersonate another service — it would have to hold that
@@ -120,12 +131,13 @@ receives contains it.
   successful call, which oversells under concurrency — that is exactly what `P4`'s atomic
   `reserve → call → settle` replaces.
 - **No MCP, no buyer of last resort.** Those are Stages 2 and 4.
-- **No version echo.** The requirement is published and versioned, but the VP does not yet name the
-  version it was built against, so a stale copy cannot fail *distinctly*. That needs one claim, and
-  it is the only format change Stage 1 asks for.
-- **No balance on the authorisation.** `meters` is service configuration here. The grant belongs on
-  the credential — the meter's initial balance is what was *purchased*, and RSA's fourth invariant
-  says the lease's contents must be re-derivable from the VC. One optional field, name to be decided.
+- **No version echo.** The requirement is published and versioned, and a request names no version —
+  deliberately. An old requirement does not make a request fail; a *check* does. So a refusal carries
+  the requirement being enforced *now*, and the caller re-reads the contract from the refusal instead
+  of having to ask for it separately.
+- **No balance on the authorisation.** `/balance` answers it on the open session, because a balance is
+  a number that moves and a credential is a document signed once. What a call *costs* is the
+  service's policy — `meters` is service configuration here, and a service may have no meter at all.
 
 ## Tests
 
@@ -133,5 +145,5 @@ receives contains it.
 npm test
 ```
 
-Eighteen rows, and most of them assert a **refusal** — a gate you have never seen refuse is a gate
+Nineteen rows, and most of them assert a **refusal** — a gate you have never seen refuse is a gate
 you do not know works.

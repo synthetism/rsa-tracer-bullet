@@ -1,0 +1,41 @@
+{
+  "name": "@synthetism/rsa-tracer-bullet",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The RSA tracer bullet — the loop, by hand, on one machine. Frozen evidence of what was believed in October 2026, not a codebase to improve. The product spec is private-docs/rsa/PRODUCT-SPEC.md.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "format": "biome format --write .",
+    "seed": "node dist/seed-cli.js",
+    "service": "node dist/service-cli.js",
+    "alice": "node dist/alice.js"
+  },
+  "dependencies": {
+    "@hsfs/adapter-node": "file:../../hsfs/packages/adapter-node",
+    "@hsfs/core": "file:../../hsfs/packages/core",
+    "@hsfs/vault": "file:../../hsfs/packages/vault",
+    "@privatekey/core": "file:../../privatekey/packages/core",
+    "@privatekey/keystore-file": "file:../../privatekey/packages/keystore-file",
+    "@synthetism/credential": "file:../packages/credential",
+    "@synthetism/did": "file:../packages/did",
+    "@synthetism/keys": "file:../packages/keys",
+    "@synthetism/vc": "file:../packages/vc",
+    "@synthetism/vp": "file:../packages/vp"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^24.19.2",
+    "typescript": "^5.8.3",
+    "vitest": "^5.0.4"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

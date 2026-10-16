@@ -1,0 +1,17 @@
+node_modules
+dist
+coverage
+*.log
+.DS_Store
+
+# The seeded vaults. Two private keys live here, so they are never committed — the
+# point of deriving them from labels is that they do not need to be.
+.rsa/
+
+# A `tsc` run without `outDir` emits beside the source. `dist/` is the only build
+# output; nothing but source belongs in `src/`.
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts
+src/**/*.d.ts.map
+*.tsbuildinfo

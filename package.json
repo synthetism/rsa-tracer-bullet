@@ -26,6 +26,7 @@
     "@synthetism/credential": "file:../packages/credential",
     "@synthetism/did": "file:../packages/did",
     "@synthetism/keys": "file:../packages/keys",
+    "@synthetism/query": "file:../packages/query",
     "@synthetism/vc": "file:../packages/vc",
     "@synthetism/vp": "file:../packages/vp"
   },

@@ -18,6 +18,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import type { RequirementSubject } from "@synthetism/query";
 import {
   type AuthorizationSubject,
   type ISigner,
@@ -27,7 +28,6 @@ import {
 } from "@synthetism/vc";
 import {
   type Challenge,
-  type RequirementSubject,
   createUnsignedPresentation,
   present,
 } from "@synthetism/vp";

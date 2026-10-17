@@ -21,23 +21,19 @@
 import { randomUUID } from "node:crypto";
 import { publicKeyFromDidKey } from "@synthetism/did";
 import { hexToPem, verifyEd25519 } from "@synthetism/keys";
+import { type RequirementSubject, createRequirement } from "@synthetism/query";
 import {
   type AuthenticationSubject,
   type AuthorizationSubject,
   type ISigner,
   type ReceiptSubject,
-  SCHEMA_BASE,
   type VerifiableCredential,
   type VerifiablePresentation,
   createUnsigned,
   decodeCredential,
   issue,
 } from "@synthetism/vc";
-import {
-  type Challenge,
-  type RequirementSubject,
-  verifyPresentation,
-} from "@synthetism/vp";
+import { type Challenge, verifyPresentation } from "@synthetism/vp";
 import { callSigningInput, digestOf } from "./call.js";
 import type { MarketReceiptSubject } from "./receipt.js";
 import type { Upstream } from "./upstream.js";
@@ -201,34 +197,28 @@ export function openFunnel(options: FunnelOptions): Funnel {
     // It is **data**, and it is signed by the service that will enforce it — so the caller is
     // told what is needed by the party that will check it, and a lookalike cannot talk an agent
     // into over-disclosure.
-    const unsigned = createUnsigned<RequirementSubject>({
-      subject: {
-        holder: { id: options.service.did },
-        requirement: {
-          name: options.requirement.name,
-          version: options.requirement.version,
-          parameters: {
-            pool: options.requirement.pool,
+    //
+    // The **envelope** is `createRequirement`'s job, and that includes the language address.
+    // This service supplies what it demands and its own revision; it never names the address,
+    // because the only version it has to hand is the wrong one.
+    const unsigned = createRequirement({
+      name: options.requirement.name,
+      version: options.requirement.version,
+      parameters: {
+        pool: options.requirement.pool,
+        scope: options.requirement.scope,
+      },
+      requirements: {
+        authorization: {
+          type: "AuthorizationCredential",
+          required: true,
+          match: {
             scope: options.requirement.scope,
-          },
-          requirements: {
-            authorization: {
-              type: "AuthorizationCredential",
-              required: true,
-              match: {
-                scope: options.requirement.scope,
-                resource: options.requirement.pool,
-              },
-            },
+            resource: options.requirement.pool,
           },
         },
       },
-      type: "RequirementCredential",
       issuer: { id: options.service.did },
-      credentialSchema: {
-        id: `${SCHEMA_BASE}/VP-Language/${options.requirement.version}`,
-        type: "JsonSchemaValidator2018",
-      },
     });
 
     requirement = (await issue(unsigned, options.service.signer)).credential;

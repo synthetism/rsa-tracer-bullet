@@ -21,7 +21,7 @@
 import { randomUUID } from "node:crypto";
 import { publicKeyFromDidKey } from "@synthetism/did";
 import { hexToPem, verifyEd25519 } from "@synthetism/keys";
-import { type RequirementSubject, createRequirement } from "@synthetism/query";
+import { type RequirementSubject, LANGUAGE_CREDENTIAL_SCHEMA, createRequirement } from "@synthetism/query";
 import {
   type AuthenticationSubject,
   type AuthorizationSubject,
@@ -198,27 +198,45 @@ export function openFunnel(options: FunnelOptions): Funnel {
     // told what is needed by the party that will check it, and a lookalike cannot talk an agent
     // into over-disclosure.
     //
-    // The **envelope** is `createRequirement`'s job, and that includes the language address.
-    // This service supplies what it demands and its own revision; it never names the address,
-    // because the only version it has to hand is the wrong one.
-    const unsigned = createRequirement({
-      name: options.requirement.name,
-      version: options.requirement.version,
-      parameters: {
-        pool: options.requirement.pool,
-        scope: options.requirement.scope,
-      },
-      requirements: {
-        authorization: {
-          type: "AuthorizationCredential",
-          required: true,
-          match: {
-            scope: options.requirement.scope,
-            resource: options.requirement.pool,
+    // The **envelope** is this app's composition, not the language's: `createRequirement`
+    // returns the subject, `createUnsigned` wraps it, and the address comes from the constant
+    // so this service cannot put its own revision there — which it once did.
+    const { pool, scope } = options.requirement;
+
+    const unsigned = createUnsigned<RequirementSubject>({
+      subject: createRequirement({
+        name: options.requirement.name,
+        version: options.requirement.version,
+        parameters: { pool, scope },
+        requirements: {
+          authorization: {
+            type: "AuthorizationCredential",
+            required: true,
+            // A **JSON Schema**, not a sketch of one. This used to read
+            // `{ scope: [...], resource: "..." }` — which is not a schema at all: `scope` is
+            // an array where a schema belongs, so the keyword was unknown, ajv ignored it,
+            // and the requirement **accepted every credential offered**. A requirement that
+            // demands nothing is not a requirement, and that is exactly what this was.
+            match: {
+              type: "object",
+              properties: {
+                resource: { const: pool },
+                // Order does not matter to a scope; membership does. One `contains` per
+                // demanded scope says "all of these are in it" and cannot be satisfied by a
+                // credential that stops at the first match.
+                ...(scope.length === 0
+                  ? {}
+                  : { scope: { allOf: scope.map((held) => ({ contains: { const: held } })) } }),
+              },
+              required: scope.length === 0 ? ["resource"] : ["resource", "scope"],
+            },
           },
         },
-      },
+        issuer: { id: options.service.did },
+      }),
+      type: "RequirementCredential",
       issuer: { id: options.service.did },
+      credentialSchema: LANGUAGE_CREDENTIAL_SCHEMA,
     });
 
     requirement = (await issue(unsigned, options.service.signer)).credential;

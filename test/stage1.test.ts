@@ -24,11 +24,13 @@ import {
   issue,
 } from "@synthetism/vc";
 import { createUnsignedPresentation, present, type Challenge } from "@synthetism/vp";
+import { validate } from "@synthetism/query";
+import { ajvEngine } from "@synthetism/utils";
 import { afterEach, describe, expect, it } from "vitest";
 import { callSigningInput, digestOf } from "../src/call.js";
 import { SERVICE_AUD, aliceAgent, bobService, type ServiceOverrides } from "../src/compose.js";
 import { openFunnel } from "../src/funnel.js";
-import { type Seeded, seed } from "../src/seed.js";
+import { AUTHORIZED_SCOPE, POOL, type Seeded, seed } from "../src/seed.js";
 import { type Running, startService } from "../src/service.js";
 import { openWallet } from "../src/stores.js";
 import type { Quote, Upstream } from "../src/upstream.js";
@@ -284,13 +286,27 @@ describe("what the credential says", () => {
       credentialSubject: {
         requirement: {
           version: string;
-          requirements: Record<string, { match?: { scope?: string[] } }>;
+          parameters?: { scope?: string[] };
+          requirements: Record<
+            string,
+            { match?: { type?: string; properties?: Record<string, unknown> } }
+          >;
         };
       };
     };
-    expect(published.credentialSubject.requirement.requirements.authorization?.match?.scope).toEqual(
-      ["read", "write"],
-    );
+    const requirement = published.credentialSubject.requirement;
+
+    // The demanded scope is *declared* where a human reads it…
+    expect(requirement.parameters?.scope).toEqual(["read", "write"]);
+
+    // …and *enforced* where a validator reads it. This assertion used to demand
+    // `match.scope` deep-equal `["read", "write"]`, which was asserting the bug: an array is
+    // not a schema, so `scope` was an unknown keyword, ajv ignored it, and the requirement
+    // accepted every credential offered. `match` must be a JSON Schema, and the tests below
+    // check it from the accepting side.
+    const match = requirement.requirements.authorization?.match;
+    expect(match?.type).toBe("object");
+    expect(Object.keys(match?.properties ?? {}).sort()).toEqual(["resource", "scope"]);
   });
 
   it("★ refuses an authorization edited after it was signed — by signature, not by a rule", async () => {
@@ -519,5 +535,48 @@ describe("the boundary", () => {
 
     expect(published.issuer.id).toBe(seeded.bob.did);
     expect(published.credentialSubject.requirement.name).toBe("market-read");
+  });
+
+  it("★ publishes a `match` that is a schema, and it refuses the wrong pool", async () => {
+    const { service, seeded } = await stage();
+    const published = await (await fetch(`${service.url}/requirement`)).json();
+
+    // `validate` is subject-blind — it judges type, holder and `match`, and verification of
+    // proofs is `@synthetism/vp`'s job. So these are plain parsed JSON, which is also what
+    // the generic signature is for.
+    const authorization = (resource: string, scope: string[]) => ({
+      type: ["VerifiableCredential", "AuthorizationCredential"],
+      credentialSubject: { holder: { id: seeded.alice.did }, scope, resource },
+    });
+
+    const judge = (credential: unknown) =>
+      validate({
+        document: published,
+        credentials: [credential],
+        holder: seeded.alice.did,
+        engine: ajvEngine(),
+      });
+
+    // What Alice actually holds passes.
+    expect(judge(authorization(POOL, AUTHORIZED_SCOPE))).toEqual({ ok: true, failures: [] });
+
+    // Everything below used to **pass**, because the published `match` was
+    // `{ scope: [...], resource: "..." }` — an array where a schema belongs. `scope` was
+    // then an unknown keyword, ajv ignored it, and the requirement accepted whatever it was
+    // offered. A requirement that accepts anything demands nothing, so these assertions are
+    // the ones that keep the requirement honest.
+    const wrongPool = judge(authorization("https://api.example.com/elsewhere", AUTHORIZED_SCOPE));
+    expect(wrongPool.ok).toBe(false);
+    expect(wrongPool.failures.map((failure) => failure.reason)).toEqual(["not-a-match"]);
+
+    const noScope = judge(authorization(POOL, []));
+    expect(noScope.ok).toBe(false);
+    expect(noScope.failures.map((failure) => failure.reason)).toEqual(["not-a-match"]);
+
+    const emptySubject = judge({
+      type: ["VerifiableCredential", "AuthorizationCredential"],
+      credentialSubject: { holder: { id: seeded.alice.did } },
+    });
+    expect(emptySubject.ok).toBe(false);
   });
 });

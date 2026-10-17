@@ -25,7 +25,7 @@ import {
 } from "@synthetism/vc";
 import { createUnsignedPresentation, present, type Challenge } from "@synthetism/vp";
 import { validate } from "@synthetism/query";
-import { ajvEngine } from "@synthetism/utils";
+import { ajvEngine } from "@synthetism/engine-ajv";
 import { afterEach, describe, expect, it } from "vitest";
 import { callSigningInput, digestOf } from "../src/call.js";
 import { SERVICE_AUD, aliceAgent, bobService, type ServiceOverrides } from "../src/compose.js";
